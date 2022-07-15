@@ -1,0 +1,160 @@
+﻿@page
+@model DataTablesRPP.Pages.ShowProductsModel
+@{
+ViewData["Title"] = "ShowProducts";
+}
+@Html.AntiForgeryToken()
+
+
+<h2>Northwind Products</h2>
+<div class="container">
+    <br />
+    <div style="width:90%; margin:0 auto;">
+        <table id="nwprod" class="table mytable table-sm table-striped table-bordered dtresponsive nowrap" width="100%" cellspacing="0">
+            <thead>
+            <tr>
+                <th>ProductId</th>
+                <th>ProductName</th>
+                <th>Price</th>
+                <th>Stock Level</th>
+                <th>Edit</th>
+                <th>Delete</th>
+            </tr>
+            </thead>
+        </table>
+    </div>
+</div>
+<!--------------modal delete confirm-------->
+<div class="modal fade" id="myModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger" id="myModalLabel">Warning.. </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h5> DELETE Product?</h5>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" onclick="DeleteProduct()" id="btnDeleteYes" href="#">Yes</button>
+                <button type="button" class="btn btn-outline-success" data-dismiss="modal">No</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!----------------------------------->
+<div id="editmodal-placeholder"></div>
+@section Scripts {
+    <script>
+        $(function () {
+            $("#nwprod").DataTable({
+                "processing": true, // to show progress bar
+                "serverSide": true, //
+                "filter": true, // to do search
+                "orderMulti": false, // to disable multiple column
+
+                "ajax": {
+                    "url": "/ShowProducts?handler=LoadData",
+                    "type": "POST",
+                    "datatype": "json",
+                    "cache": false,
+                    // AntiforgeryToken is required by RazorPages
+                    "headers": {
+                        RequestVerificationToken: $('input:hidden[name="__RequestVerificationToken"]').val()
+                    }
+                },
+                "columnDefs":
+                    [{
+                        "targets": [0], // make ProductId invisible
+                        "visible": false,
+                        "searchable": true
+                    }],
+                "columns": [
+                    { "data": "productId", "name": "ProductId", "autoWidth": true },
+                    { "data": "productName", "name": "ProductName", "autoWidth": true },
+                    { "data": "unitPrice", "name": "UnitPrice", "autoWidth": true },
+                    { "data": "unitsInStock", "name": "UnitsInStock", "autoWidth": true},
+                    {"render": function (data, type, full, meta) {
+                         return '<a class="btn-sm btn-primary" href="/ShowProducts?handler=Edit&id=' + full.productId + '" onclick="return EditData(' +  full.productId + ')";>Edit</a>';
+                        }
+                    },
+                    {
+                        data: null, render: function (data, type, row) {
+                        return "<a href='#' class='btn-sm btn-danger' 
+                        onclick=DeleteData('" + row.productId + "'); >Delete</a>";
+                        }
+                    },
+                ],
+            });
+        });
+        function EditData(productId) {
+            var url = '/ShowProducts?handler=ProductsModalPartial&prodid=' + productId;
+            var placeholderElement = $('#editmodal-placeholder');
+            $.get(url).done(function (data) {
+                placeholderElement.html(data);
+                placeholderElement.find('.modal').modal({
+                    backdrop: 'static', // to prevent closing modal when clicked outside
+                    keyboard: true, // e.g., prevent escape on keyboard closing modal
+                    show: true,
+                    //id: productId
+                });
+            });
+            $("#btnSaveYes").attr('data-prodid', productId);
+            return false;
+        }
+
+        var placeholderElement = $('#editmodal-placeholder');
+        placeholderElement.on('click', '[data-save="modal"]', function (event) { event.preventDefault();
+            var form = $(this).parents('.modal').find('form');
+            var actionUrl = form.attr('action');
+            var dataToSend = form.serialize();
+            var isValid = form.find('[name="IsValid"]').val() == 'True';
+            $.post(actionUrl, dataToSend).done(function (data) {
+                // data is the rendered _ProductEditPartial
+                var newBody = $('.modal-body', data);
+                // replace modal contents with new form
+                placeholderElement.find('.modal-body').replaceWith(newBody);
+                oTable = $('#nwprod').DataTable();
+                oTable.draw('page');
+            });
+        });
+
+        function DeleteData(productId) { // modal confirm for delete
+            // set the data-prodid attribute in modal to productId
+            // so that when this button is clicked, we can retrieve
+            // the attribute and find the productId to delete
+            $("#btnDeleteYes").attr('data-prodid', productId);
+            $('#myModal').modal({
+                backdrop: 'static', // to prevent closing modal when clicked outside
+                keyboard: true, // e.g., prevent escape on keyboard closing modal
+                show: true,
+                // id: productId
+            });
+        }
+
+        function DeleteProduct() {
+            var productId = $("#btnDeleteYes").attr('data-prodid')
+            var urldel = "/ShowProducts?handler=Delete";
+            $.ajax({
+                url: urldel,
+                type: "POST",
+                datatype: "json",
+                data: { prodId: productId },
+                // AntiforgeryToken is required by RazorPages
+                headers: {
+                    RequestVerificationToken: $('input:hidden[name="__RequestVerificationToken"]').val()
+                },
+                success: function (result) {
+                    if (result) {
+                        oTable = $('#nwprod').DataTable();
+                        oTable.draw('page');
+                    }
+                    else {
+                        alert("Something Went Wrong!");
+                    }
+                }
+            });
+            $("#myModal .close").click(); // close modal
+        }
+    </script>
+}
